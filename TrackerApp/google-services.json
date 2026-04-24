@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "545124896591",
+    "project_id": "trackerapp-c66db",
+    "storage_bucket": "trackerapp-c66db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:545124896591:android:f78ff27599109ecc1cbf3a",
+        "android_client_info": {
+          "package_name": "com.trackerapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeIoC7YOVi2YY_JC9U24uDD9JJoHi3LnA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
