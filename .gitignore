@@ -404,3 +404,4 @@ FodyWeavers.xsd
 .env.example
 
 google-services.json
+ TrackerApp/google-services.json
