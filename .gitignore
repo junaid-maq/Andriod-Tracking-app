@@ -402,3 +402,5 @@ FodyWeavers.xsd
 
 .env
 .env.example
+
+google-services.json
