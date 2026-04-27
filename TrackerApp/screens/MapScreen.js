@@ -10,9 +10,32 @@ export default function MapScreen() {
   const [members, setMembers] = useState({});
 
   useEffect(() => {
-    startTracking();
-    listenToMembers();
-  }, []);
+  startBackgroundTracking();
+  startTracking();
+  listenToMembers();
+}, []);
+
+  const startBackgroundTracking = async () => {
+  const { status: foreground } = await Location.requestForegroundPermissionsAsync();
+  const { status: background } = await Location.requestBackgroundPermissionsAsync();
+  
+  if (foreground !== 'granted' || background !== 'granted') {
+    Alert.alert('Permission denied', 'Both location permissions are required');
+    return;
+  }
+
+  await Location.startLocationUpdatesAsync('background-location-task', {
+    accuracy: Location.Accuracy.BestForNavigation,
+    timeInterval: 10000,
+    distanceInterval: 10,
+    showsBackgroundLocationIndicator: true,
+    foregroundService: {
+      notificationTitle: 'Tracker App',
+      notificationBody: 'Sharing your location with family',
+      notificationColor: '#4f46e5'
+    }
+  });
+};
 
   const startTracking = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
