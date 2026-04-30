@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import { ref, set, onValue } from 'firebase/database';
+import { ref, set, get, onValue } from 'firebase/database';
 import { auth, db } from '../firebaseConfig';
 
 export default function MapScreen() {
@@ -10,70 +10,104 @@ export default function MapScreen() {
   const [members, setMembers] = useState({});
 
   useEffect(() => {
-  startBackgroundTracking();
-  startTracking();
-  listenToMembers();
-}, []);
+    startBackgroundTracking();
+    startTracking();
+    listenToConnectedMembers();
+  }, []);
 
   const startBackgroundTracking = async () => {
-  const { status: foreground } = await Location.requestForegroundPermissionsAsync();
-  const { status: background } = await Location.requestBackgroundPermissionsAsync();
-  
-  if (foreground !== 'granted' || background !== 'granted') {
-    Alert.alert('Permission denied', 'Both location permissions are required');
-    return;
-  }
+    const { status: foreground } = await Location.requestForegroundPermissionsAsync();
+    const { status: background } = await Location.requestBackgroundPermissionsAsync();
 
-  await Location.startLocationUpdatesAsync('background-location-task', {
-    accuracy: Location.Accuracy.BestForNavigation,
-    timeInterval: 10000,
-    distanceInterval: 10,
-    showsBackgroundLocationIndicator: true,
-    foregroundService: {
-      notificationTitle: 'Tracker App',
-      notificationBody: 'Sharing your location with family',
-      notificationColor: '#4f46e5'
+    if (foreground !== 'granted' || background !== 'granted') {
+      Alert.alert('Permission denied', 'Both location permissions are required');
+      return;
     }
-  });
-};
+
+    await Location.startLocationUpdatesAsync('background-location-task', {
+      accuracy: Location.Accuracy.BestForNavigation,
+      timeInterval: 10000,
+      distanceInterval: 10,
+      showsBackgroundLocationIndicator: true,
+      foregroundService: {
+        notificationTitle: 'Tracker App',
+        notificationBody: 'Sharing your location with family',
+        notificationColor: '#4f46e5'
+      }
+    });
+  };
 
   const startTracking = async () => {
     const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission denied', 'Location permission is required');
-      return;
-    }
-    
-    const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-const { latitude, longitude } = current.coords;
-setLocation({ latitude, longitude });
+    if (status !== 'granted') return;
+
+    const current = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.High
+    });
+    const { latitude, longitude } = current.coords;
+    setLocation({ latitude, longitude });
 
     Location.watchPositionAsync(
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 5000, distanceInterval: 5 },
-      (loc) => {
+      async (loc) => {
         const { latitude, longitude } = loc.coords;
         setLocation({ latitude, longitude });
 
         const user = auth.currentUser;
         if (user) {
+          const userSnap = await get(ref(db, `users/${user.uid}/ghostMode`));
+          const isGhost = userSnap.exists() ? userSnap.val() : false;
+
           set(ref(db, `locations/${user.uid}`), {
             latitude,
             longitude,
             email: user.email,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            isVisible: !isGhost
           });
         }
       }
     );
   };
 
-  const listenToMembers = () => {
-    const locationsRef = ref(db, 'locations');
-    onValue(locationsRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) setMembers(data);
+  const listenToConnectedMembers = async () => {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  // always include yourself
+  const connectedUids = new Set();
+  connectedUids.add(user.uid);
+
+  // get connections if any exist
+  const userConnRef = ref(db, `users/${user.uid}/connections`);
+  const userConnSnap = await get(userConnRef);
+  
+  if (userConnSnap.exists()) {
+    const connectionIds = Object.keys(userConnSnap.val());
+    for (const connId of connectionIds) {
+      const connSnap = await get(ref(db, `connections/${connId}/members`));
+      if (connSnap.exists()) {
+        Object.keys(connSnap.val()).forEach(uid => connectedUids.add(uid));
+      }
+    }
+  }
+
+  // listen to locations
+  const locationsRef = ref(db, 'locations');
+  onValue(locationsRef, (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    const filtered = {};
+    Object.entries(data).forEach(([uid, info]) => {
+      if (connectedUids.has(uid) && info.isVisible !== false) {
+        filtered[uid] = info;
+      }
     });
-  };
+
+    setMembers(filtered);
+  });
+};
 
   return (
     <View style={styles.container}>
